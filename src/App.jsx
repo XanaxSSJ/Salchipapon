@@ -8,6 +8,8 @@ import Venta from './components/Venta';
 import Gastos from './components/Gastos';
 import Dashboard from './components/Dashboard';
 import ListaPedidos from './components/ListaPedidos';
+import AgregarProducto from './components/AgregarProducto';
+
 
 function App() {
     const [usuario, setUsuario] = useState(null);
@@ -87,6 +89,12 @@ function App() {
                             >
                                 📊 Dashboard
                             </button>
+                            <button
+                                onClick={() => setVista('productos')}
+                                className={`px-4 py-2 rounded-md font-medium text-sm transition ${vista === 'productos' ? 'bg-orange-100 text-orange-700' : 'text-gray-600 hover:bg-gray-100'}`}
+                            >
+                                ➕ Productos
+                            </button>
                         </>
                     )}
                 </div>
@@ -97,6 +105,7 @@ function App() {
                     {vista === 'pedidos' && <ListaPedidos />}
                     {vista === 'gastos' && rol === 'admin' && <Gastos />}
                     {vista === 'dashboard' && rol === 'admin' && <Dashboard />}
+                    {vista === 'productos' && rol === 'admin' && <AgregarProducto />}
                 </div>
             </div>
         </div>

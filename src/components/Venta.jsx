@@ -17,7 +17,9 @@ const Venta = () => {
     const [cliente, setCliente] = useState('');
     const [mensaje, setMensaje] = useState('');
 
-    // Utils
+    const [busqueda, setBusqueda] = useState('');
+    const [resultadoBusqueda, setResultadoBusqueda] = useState([]);
+
     const setMensajeTemporal = (texto, tiempo = 2500) => {
         setMensaje(texto);
         setTimeout(() => setMensaje(''), tiempo);
@@ -25,7 +27,6 @@ const Venta = () => {
 
     const getProducto = (id) => productos.find(p => p.id === id);
 
-    // Cargar productos una sola vez
     useEffect(() => {
         const cargarProductos = async () => {
             const snap = await getDocs(collection(db, 'productos'));
@@ -35,14 +36,33 @@ const Venta = () => {
         cargarProductos();
     }, []);
 
-    // Agregar producto
+    useEffect(() => {
+        const palabras = busqueda.toLowerCase().split(' ').filter(Boolean);
+        if (palabras.length === 0) {
+            setResultadoBusqueda([]);
+            return;
+        }
+
+        const filtrados = productos.filter(producto =>
+            palabras.every(palabra =>
+                producto.nombre.toLowerCase().includes(palabra)
+            )
+        );
+        setResultadoBusqueda(filtrados);
+    }, [busqueda, productos]);
+
+    const seleccionarProducto = (producto) => {
+        setProductoSeleccionado(producto.id);
+        setBusqueda(producto.nombre);
+        setResultadoBusqueda([]);
+    };
+
     const agregar = () => {
         const producto = getProducto(productoSeleccionado);
         const cantidadInt = parseInt(cantidad);
-
         if (!producto || cantidadInt < 1) return;
 
-        if (producto.stock < cantidadInt) {
+        if (producto.stock < cantidadInt && producto.stock !== 999) {
             return setMensajeTemporal(`❌ No hay stock suficiente para "${producto.nombre}".`);
         }
 
@@ -72,14 +92,13 @@ const Venta = () => {
 
         setCantidad(1);
         setProductoSeleccionado('');
+        setBusqueda('');
     };
 
-    // Modificar cantidad
     const modificarCantidad = (id, nuevaCantidad) => {
         if (nuevaCantidad < 1) return;
-
         const producto = getProducto(id);
-        if (producto && producto.stock < nuevaCantidad) {
+        if (producto && producto.stock < nuevaCantidad && producto.stock !== 999) {
             return setMensajeTemporal(`❌ No hay suficiente stock para "${producto.nombre}".`);
         }
 
@@ -98,7 +117,6 @@ const Venta = () => {
 
     const total = items.reduce((sum, item) => sum + item.subtotal, 0);
 
-    // Guardar venta
     const guardarVenta = async () => {
         if (items.length === 0) {
             return setMensajeTemporal('❌ No hay productos en la venta');
@@ -120,21 +138,21 @@ const Venta = () => {
         try {
             const ventaRef = await addDoc(collection(db, 'ventas'), ventaData);
 
-            // Actualizar stock
             await Promise.all(
-                items.map(item =>
-                    updateDoc(doc(db, 'productos', item.id), {
-                        stock: item.stock - item.cantidad
-                    })
-                )
+                items.map(item => {
+                    if (item.stock !== 999) {
+                        return updateDoc(doc(db, 'productos', item.id), {
+                            stock: item.stock - item.cantidad
+                        });
+                    }
+                    return null;
+                })
             );
 
-            // Limpiar campos
             setItems([]);
             setCliente('');
             setMensaje('✅ Venta registrada correctamente!');
             abrirNotaParaImprimir(ventaData);
-
         } catch (error) {
             console.error('Error al guardar venta:', error);
             setMensaje(`❌ Error: ${error.message}`);
@@ -184,20 +202,16 @@ const Venta = () => {
         win.document.close();
     };
 
-    // El render del JSX permanece igual...
-
     return (
         <div className="max-w-4xl mx-auto p-4">
             <h2 className="text-2xl font-bold text-orange-600 mb-6">Registro de Ventas</h2>
 
-            {/* Mensaje de estado */}
             {mensaje && (
                 <div className={`mb-4 p-3 rounded-md ${mensaje.includes('✅') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                     {mensaje}
                 </div>
             )}
 
-            {/* Sección Cliente */}
             <div className="bg-white p-4 rounded-lg shadow-sm mb-6">
                 <label className="block text-gray-700 mb-2 font-medium">Cliente</label>
                 <input
@@ -209,23 +223,33 @@ const Venta = () => {
                 />
             </div>
 
-            {/* Sección Agregar Productos */}
             <div className="bg-white p-4 rounded-lg shadow-sm mb-6">
                 <h3 className="text-lg font-medium text-gray-700 mb-4">Agregar Productos</h3>
 
                 <div className="flex flex-col md:flex-row gap-3 mb-4">
-                    <select
-                        value={productoSeleccionado}
-                        onChange={e => setProductoSeleccionado(e.target.value)}
-                        className="flex-1 p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-                    >
-                        <option value="">Seleccionar producto</option>
-                        {productos.map(p => (
-                            <option key={p.id} value={p.id}>
-                                {p.nombre} - S/ {p.precio.toFixed(2)} ({p.stock} disp.)
-                            </option>
-                        ))}
-                    </select>
+                    <div className="relative w-full">
+                        <input
+                            type="text"
+                            value={busqueda}
+                            onChange={e => setBusqueda(e.target.value)}
+                            placeholder="Buscar producto por nombre"
+                            className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        />
+
+                        {resultadoBusqueda.length > 0 && (
+                            <ul className="absolute z-10 bg-white border border-gray-200 rounded-md shadow-md w-full max-h-48 overflow-y-auto mt-1">
+                                {resultadoBusqueda.map(p => (
+                                    <li
+                                        key={p.id}
+                                        onClick={() => seleccionarProducto(p)}
+                                        className="px-4 py-2 cursor-pointer hover:bg-orange-100 text-sm"
+                                    >
+                                        {p.nombre} - S/ {p.precio.toFixed(2)} {p.stock !== 999 && `(${p.stock} disp.)`}
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
 
                     <input
                         type="number"
@@ -246,7 +270,6 @@ const Venta = () => {
                 </div>
             </div>
 
-            {/* Lista de Productos */}
             <div className="bg-white p-4 rounded-lg shadow-sm mb-6">
                 <h3 className="text-lg font-medium text-gray-700 mb-4">Productos en la venta</h3>
 
@@ -271,16 +294,13 @@ const Venta = () => {
                                     >
                                         -
                                     </button>
-
                                     <span className="w-10 text-center">{item.cantidad}</span>
-
                                     <button
                                         onClick={() => modificarCantidad(item.id, item.cantidad + 1)}
                                         className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1 px-2 rounded"
                                     >
                                         +
                                     </button>
-
                                     <button
                                         onClick={() => eliminarProducto(item.id)}
                                         className="ml-4 text-red-500 hover:text-red-700"
@@ -300,7 +320,6 @@ const Venta = () => {
                 </div>
             </div>
 
-            {/* Botón Guardar */}
             <div className="text-center">
                 <button
                     onClick={guardarVenta}
