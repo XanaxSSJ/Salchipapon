@@ -104,8 +104,8 @@ function App() {
                     {vista === 'ventas' && <Venta />}
                     {vista === 'pedidos' && <ListaPedidos />}
                     {vista === 'gastos' && rol === 'admin' && <Gastos />}
-                    {vista === 'dashboard' && rol === 'admin' && <Dashboard />}
-                    {vista === 'productos' && rol === 'admin' && <AgregarProducto />}
+                    {vista === 'dashboard' && <Dashboard />}
+                    {vista === 'productos' && <AgregarProducto />}
                 </div>
             </div>
         </div>

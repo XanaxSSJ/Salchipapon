@@ -1,10 +1,6 @@
 import { useEffect, useState } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import { Bar } from 'react-chartjs-2';
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
-
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 const Dashboard = () => {
     const [ingresos, setIngresos] = useState(0);
@@ -14,24 +10,23 @@ const Dashboard = () => {
         mes: new Date().getMonth() + 1,
         año: new Date().getFullYear()
     });
+    const [ventasPorDia, setVentasPorDia] = useState([]);
 
     const meses = [
         'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
         'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
     ];
 
-    const años = Array.from({length: 5}, (_, i) => new Date().getFullYear() - i);
+    const años = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
 
     useEffect(() => {
         const cargarDatos = async () => {
             try {
                 setCargando(true);
 
-                // Crear rango de fechas para el mes seleccionado
                 const primerDia = new Date(filtro.año, filtro.mes - 1, 1);
                 const ultimoDia = new Date(filtro.año, filtro.mes, 0);
 
-                // Consulta ventas del mes
                 const qVentas = query(
                     collection(db, 'ventas'),
                     where('fecha', '>=', primerDia),
@@ -39,10 +34,11 @@ const Dashboard = () => {
                 );
 
                 const ventasSnap = await getDocs(qVentas);
-                const totalVentas = ventasSnap.docs.reduce((sum, doc) => sum + doc.data().total, 0);
+                const ventas = ventasSnap.docs.map(doc => doc.data());
+
+                const totalVentas = ventas.reduce((sum, v) => sum + v.total, 0);
                 setIngresos(totalVentas);
 
-                // Consulta gastos del mes
                 const qGastos = query(
                     collection(db, 'gastos'),
                     where('fecha', '>=', primerDia),
@@ -52,6 +48,17 @@ const Dashboard = () => {
                 const gastosSnap = await getDocs(qGastos);
                 const totalGastos = gastosSnap.docs.reduce((sum, doc) => sum + doc.data().monto, 0);
                 setGastos(totalGastos);
+
+                const ventasAgrupadas = {};
+                ventas.forEach(v => {
+                    const d = v.fecha.toDate().toLocaleDateString('es-PE');
+                    ventasAgrupadas[d] = (ventasAgrupadas[d] || 0) + v.total;
+                });
+
+                const ventasPorDiaArray = Object.entries(ventasAgrupadas).map(([fecha, total]) => ({ fecha, total }));
+                ventasPorDiaArray.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+                setVentasPorDia(ventasPorDiaArray);
+
             } catch (error) {
                 console.error("Error cargando datos:", error);
             } finally {
@@ -64,56 +71,7 @@ const Dashboard = () => {
 
     const handleFiltroChange = (e) => {
         const { name, value } = e.target;
-        setFiltro(prev => ({
-            ...prev,
-            [name]: parseInt(value)
-        }));
-    };
-
-    const data = {
-        labels: ['Ingresos', 'Gastos', 'Ganancia'],
-        datasets: [{
-            label: 'Soles (S/)',
-            data: [ingresos, gastos, ingresos - gastos],
-            backgroundColor: [
-                'rgba(76, 175, 80, 0.7)',
-                'rgba(244, 67, 54, 0.7)',
-                'rgba(255, 152, 0, 0.7)'
-            ],
-            borderColor: [
-                'rgba(76, 175, 80, 1)',
-                'rgba(244, 67, 54, 1)',
-                'rgba(255, 152, 0, 1)'
-            ],
-            borderWidth: 1,
-            borderRadius: 4
-        }]
-    };
-
-    const options = {
-        responsive: true,
-        plugins: {
-            legend: {
-                position: 'top',
-            },
-            title: {
-                display: true,
-                text: `Resumen Financiero - ${meses[filtro.mes - 1]} ${filtro.año}`,
-                font: {
-                    size: 16
-                }
-            },
-        },
-        scales: {
-            y: {
-                beginAtZero: true,
-                ticks: {
-                    callback: function(value) {
-                        return 'S/ ' + value.toLocaleString('es-PE');
-                    }
-                }
-            }
-        }
+        setFiltro(prev => ({ ...prev, [name]: parseInt(value) }));
     };
 
     if (cargando) {
@@ -177,8 +135,25 @@ const Dashboard = () => {
                 </div>
             </div>
 
-            <div className="bg-white p-6 rounded-lg shadow">
-                <Bar data={data} options={options} />
+            <div className="bg-white p-6 rounded-lg shadow border-l-4 border-orange-400 mt-6">
+                <h3 className="text-lg font-bold mb-4 text-orange-600">Ventas por Día</h3>
+
+                <table className="w-full table-auto text-sm border border-gray-200 rounded overflow-hidden">
+                    <thead className="bg-orange-100 text-gray-700">
+                    <tr>
+                        <th className="px-4 py-2 text-left">Fecha</th>
+                        <th className="px-4 py-2 text-left">Total Ventas</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {ventasPorDia.map(({ fecha, total }, i) => (
+                        <tr key={i} className="border-t hover:bg-orange-50">
+                            <td className="px-4 py-2">{fecha}</td>
+                            <td className="px-4 py-2 font-semibold text-green-700">S/ {total.toFixed(2)}</td>
+                        </tr>
+                    ))}
+                    </tbody>
+                </table>
             </div>
 
             <div className="mt-6 text-sm text-gray-500">
